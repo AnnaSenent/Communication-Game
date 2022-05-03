@@ -1,14 +1,44 @@
-# Convert to one-hot format
+"""
+This class takes a text file as input and converts it into the format required
+by the sum game, a map-style dataset that maps the input integers to one-hot vectors
+and stores them in a data-frame.
+"""
 
-one_hot_data = np.empty((n_input, N*n_integers_to_sum))
-for i in range(len(integers_to_matrix)):
-    initialize = np.zeros(N*n_integers_to_sum)
-    initialize[integers_to_matrix[0][0]] = 1
-    initialize[integers_to_matrix[0][1] + N] = 1
-    one_hot_data[i] = initialize
+import numpy as np
+import torch
+from torch.utils.data import Dataset
 
-one_hot_labels = np.empty((n_input, labels.max()+1))
-for i in range(len(labels)):
-    initialize = np.zeros((labels.max()+1))
-    initialize[labels[i]] = 1
-    one_hot_labels[i] = initialize
+class SumDataset(Dataset):
+
+    def __init__(self, path, N, n_integers):
+        data = np.loadtxt(path, dtype='U')
+
+        self.data = data
+        self.dataset = torch.empty((len(self.data), N*n_integers))
+        self.labels = torch.empty((len(self.data), N*n_integers))
+
+        for i in range(len(self.data)):
+            initialize = torch.zeros(N*n_integers)
+            initialize[int(self.data[i][0])] = 1
+            initialize[int(self.data[i][1]) + N] = 1
+            self.dataset[i] = initialize
+
+            label = torch.zeros(N*n_integers)
+            label[int(self.data[i][-1])] = 1
+            self.labels[i] = label
+
+    def get_n_features(self):
+        return self.dataset[0].size(0)
+
+    def get_dataset(self):
+        return self.dataset
+
+    def get_labels(self):
+        return self.labels
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, id_item):
+        return self.data[id_item]
+
