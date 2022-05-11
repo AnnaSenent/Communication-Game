@@ -1,7 +1,7 @@
 
 
 import argparse
-
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -16,7 +16,7 @@ from egg.core import Callback, Interaction, PrintValidationEvents
 
 def get_params(params):
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Play the summation game")
 
     # We specify our parameters here
 
@@ -37,6 +37,10 @@ def get_params(params):
     parser.add_argument(
         "--n_integers", type=int, default=2, help="Number of integers to sum"
     )
+
+    parser.add_argument(
+        "--validation_batch_size", type=int, default=0, help="Batch size for the validation data"
+    )
     # Specify arguments used during the training process (only for gs mode)
     parser.add_argument(
         "--temperature", type=float, default=1.0, help="Temperature for the sender agent in gs mode (default : 1.0)"
@@ -56,7 +60,7 @@ def get_params(params):
     )
 
     parser.add_argument(
-        "--receiver_hidden", type=str, default=16, help="Size of the hidden layer for the receiver agent (default : 16)"
+        "--receiver_hidden", type=int, default=16, help="Size of the hidden layer for the receiver agent (default : 16)"
     )
 
     parser.add_argument(
@@ -74,8 +78,8 @@ def get_params(params):
         help="Print the validation data, the messages produced by the sender andthe output probabilities produced by the receiver"
     )
 
-    # args = core.init(parser, params)
-    args = parser.parse_args()
+    # args = parser.parse_args()
+    args = core.init(parser, params)
 
     return args
 
@@ -85,26 +89,29 @@ def load_data(params):
 
     data = SumDataset(args.train, args.N, args.n_integers)
 
-    train_data = DataLoader(data, batch_size=args.batch_size, shuffle=True, num_workers=1)
-    val_data = DataLoader(SumDataset(args.val, args.N, args.n_integers), batch_size=args.test_batch_size, shuffle=False, num_workers=1)
+    train_data = DataLoader(data.get_dataset(), batch_size=args.batch_size, shuffle=True, num_workers=1)
+    train_labels = DataLoader(data.get_labels(), batch_size=args.batch_size, shuffle=True, num_workers=1)
+    val_data = DataLoader(SumDataset(args.val, args.N, args.n_integers).get_dataset(), batch_size=args.validation_batch_size, shuffle=False, num_workers=1)
+    val_labels = DataLoader(SumDataset(args.val, args.N, args.n_integers).get_labels(), batch_size=args.validation_batch_size, shuffle=False, num_workers=1)
 
     n_features = data.get_n_features()
 
-    return train_data, val_data, n_features
+    return train_data, train_labels, val_data, val_labels, n_features
 
-
-def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
-
-    loss = F.cross_entropy(receiver_output, labels, reduction='none')
-
-
-    return loss
 
 def egg_gs_mode(params):
 
-    load_train, load_val, n_features = load_data(params)
-    sender = SumSender()
-    receiver = SumReceiver()
+    args = get_params(params)
+    train_data, train_labels, val_data, val_labels, n_features = load_data(params)
+    sender = SumSender(n_features=n_features, n_hidden=args.sender_hidden)
+    receiver = SumReceiver(n_features=n_features, n_hidden=args.receiver_hidden)
+
+    def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
+        acc = (receiver_output.argmax(dim=1) == labels).detach().float()
+
+        loss = F.cross_entropy(receiver_output, labels, reduction='none')
+
+        return loss, {'acc': acc}
 
     agent_sender = core.RnnSenderGS(
         sender,
@@ -126,34 +133,43 @@ def egg_gs_mode(params):
 
     game = core.SenderReceiverRnnGS(agent_sender, agent_receiver, loss)
 
-    callbacks = [core.TemperatureUpdater(agent=agent_sender, decay=0.9, minimum=0.1)]
+
 
     optimizer = core.build_optimizer(game.parameters())
 
+
+
+
     if args.print_validation_events == True:
+
+        callbacks = [core.TemperatureUpdater(agent=agent_sender, decay=0.9, minimum=0.1),
+                     core.ConsoleLogger(print_train_loss=True, as_json=True),
+                     core.PrintValidationEvents(n_epochs=args.n_epochs)]
 
         trainer = core.Trainer(
             game=game,
             optimizer=optimizer,
-            train_data=load_train,
-            validation_data=load_val,
-            callbacks=callbacks
-            + [
-                core.ConsoleLogger(print_train_loss=True, as_json=True),
-                core.PrintValidationEvents(n_epochs=args.n_epochs),
-                      ],
-        )
+            train_data=train_data,
+            validation_data=val_data,
+            callbacks=callbacks)
 
     else:
 
+        callbacks = [core.TemperatureUpdater(agent=agent_sender, decay=0.9, minimum=0.1),
+                     core.ConsoleLogger(print_train_loss=True, as_json=True)]
+
         trainer = core.Trainer(
             game=game,
             optimizer=optimizer,
-            train_data=load_train,
-            validation_data=load_val,
-            callbacks=callbacks
-            + [core.ConsoleLogger(print_train_loss=True, as_json=True)],
-        )
+            train_data=train_data,
+            validation_data=val_data,
+            callbacks=callbacks)
 
     trainer.train(n_epochs=args.n_epochs)
+
+
+if __name__ == "__main__":
+    import sys
+
+    egg_gs_mode(sys.argv[1:])
 

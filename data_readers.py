@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 class SumDataset(Dataset):
 
     def __init__(self, path, N, n_integers):
-        data = np.loadtxt(path, dtype=int_)
+        data = np.loadtxt(path, dtype='U')
 
         self.data = data
         self.dataset = torch.empty((len(self.data), N*n_integers+1))
