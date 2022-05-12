@@ -89,8 +89,11 @@ def load_data(params):
 
     data = SumDataset(args.train, args.N, args.n_integers)
 
-    train_data = DataLoader(data.get_dataset(), batch_size=args.batch_size, shuffle=True, num_workers=1)
+    train_data = DataLoader(data, batch_size=args.batch_size, shuffle=True, num_workers=1)
+
+    # train_data = DataLoader(data.get_dataset(), batch_size=args.batch_size, shuffle=True, num_workers=1)
     train_labels = DataLoader(data.get_labels(), batch_size=args.batch_size, shuffle=True, num_workers=1)
+
     val_data = DataLoader(SumDataset(args.val, args.N, args.n_integers).get_dataset(), batch_size=args.validation_batch_size, shuffle=False, num_workers=1)
     val_labels = DataLoader(SumDataset(args.val, args.N, args.n_integers).get_labels(), batch_size=args.validation_batch_size, shuffle=False, num_workers=1)
 
