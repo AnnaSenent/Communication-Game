@@ -24,8 +24,8 @@ class SumReceiver(nn.Module):
         self.dropout = nn.Dropout(0.3)
 
     def forward(self, x, _input, _aux_input):
-        # return self.output(x)
+        return self.output(x)
 
-        x = self.dropout(x)
-        x = F.relu(self.output(x))
-        return x
+        # x = self.dropout(x)
+        # x = F.relu(self.output(x))
+        # return x
