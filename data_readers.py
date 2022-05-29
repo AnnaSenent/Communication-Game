@@ -8,22 +8,23 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+
 class SumDataset(Dataset):
 
     def __init__(self, path, N, n_integers):
         data = np.loadtxt(path, dtype='U')
 
         self.data = data
-        self.dataset = torch.empty((len(self.data), N*n_integers+1))
-        self.labels = torch.empty((len(self.data), N*n_integers+1))
+        self.dataset = torch.empty((len(self.data), N*n_integers))
+        self.labels = torch.empty((len(self.data), N*n_integers))
 
         for i in range(len(self.data)):
-            initialize = torch.zeros(N*n_integers+1)
+            initialize = torch.zeros(N*n_integers)
             initialize[int(self.data[i][0])] = 1
             initialize[int(self.data[i][1]) + N] = 1
             self.dataset[i] = initialize
 
-            label = torch.zeros(N*n_integers+1)
+            label = torch.zeros(N*n_integers)
             label[int(self.data[i][-1])] = 1
             self.labels[i] = label
 

@@ -1,4 +1,5 @@
 
+
 import argparse
 import os
 import numpy as np
@@ -63,7 +64,7 @@ def get_params(params):
     )
 
     parser.add_argument(
-        "--sender_embedding", type=int, default=16, help="Output dimensionality for the layer that embeds symbols produced by the sender (default : 16)"
+            "--sender_embedding", type=int, default=16, help="Output dimensionality for the layer that embeds symbols produced by the sender (default : 16)"
     )
 
     parser.add_argument(
@@ -77,6 +78,7 @@ def get_params(params):
         help="Print the validation data, the messages produced by the sender andthe output probabilities produced by the receiver"
     )
 
+    # args = parser.parse_args()
     args = core.init(parser, params)
 
     return args
@@ -89,6 +91,7 @@ def load_data(params):
 
     train_data = DataLoader(data, batch_size=args.batch_size, shuffle=True, num_workers=1)
 
+    # train_data = DataLoader(data.get_dataset(), batch_size=args.batch_size, shuffle=True, num_workers=1)
     train_labels = DataLoader(data.get_labels(), batch_size=args.batch_size, shuffle=True, num_workers=1)
 
     val_data = DataLoader(SumDataset(args.val, args.N, args.n_integers), batch_size=args.validation_batch_size, shuffle=False, num_workers=1)
@@ -98,23 +101,61 @@ def load_data(params):
 
     return train_data, train_labels, val_data, val_labels, n_features
 
-def egg(params):
+
+def egg_gs_mode(params):
 
     args = get_params(params)
     train_data, train_labels, val_data, val_labels, n_features = load_data(params)
     sender = SumSender(n_features=n_features, n_hidden=args.sender_hidden)
     receiver = SumReceiver(n_features=n_features, n_hidden=args.receiver_hidden)
 
+    # device = torch.device("cuda" if args.cuda else "cpu")
+
+    # def loss(sender_input, _1, _2, receiver_output, _3, _4):
+    #     return (sender_input - receiver_output).pow(2.0).mean(dim=1), {}
+
     def loss(_sender_input, _message, _receiver_input, receiver_output, labels, _aux_input):
+
+        # print('RECEIVER OUTPUT:  ', receiver_output)
+        # print('LABELS: ', labels)
+        print('RECEIVER LENGTH: ', len(receiver_output))
+        print('SHAPE RECEIVER: ', receiver_output.shape)
+        print('RECEIVER LENGTH argmax dim1: ', len(receiver_output.argmax(dim=1)))
+        print('RECEIVER LENGTH argmax dim0: ', len(receiver_output.argmax(dim=0)))
+        print('LABEL SHAPE: ', labels.shape)
+        print('LABEL LENGTH:  ', len(labels))
+        print('LENGTH LABEL 1: ', len(labels[0]))
+        print(receiver_output.argmax(dim=1) == labels)
+        print(receiver_output.argmax(dim=0) == labels)
+
+        acc = (receiver_output.argmax(dim=1) == labels).detach().float()
+
         loss = F.cross_entropy(receiver_output, labels, reduction='none')
 
-        return loss, {}
+        return loss, {'acc': acc}
 
-    agent_sender = core.GumbelSoftmaxWrapper(sender, temperature=args.temperature)
-    agent_receiver = core.SymbolReceiverWrapper(receiver, vocab_size=args.vocab_size,
-                                                agent_input_size=args.receiver_hidden)
 
-    game = core.SymbolGameGS(agent_sender, agent_receiver, loss)
+
+    agent_sender = core.RnnSenderGS(
+        sender,
+        vocab_size=args.vocab_size,
+        embed_dim=args.sender_embedding,
+        hidden_size=args.sender_hidden,
+        cell=args.sender_cell,
+        max_len=args.max_len,
+        temperature=args.temperature
+    )
+
+    agent_receiver = core.RnnReceiverGS(
+        receiver,
+        vocab_size=args.vocab_size,
+        embed_dim=args.receiver_embedding,
+        hidden_size=args.receiver_hidden,
+        cell=args.receiver_cell
+    )
+
+    game = core.SenderReceiverRnnGS(agent_sender, agent_receiver, loss)
+
     optimizer = core.build_optimizer(game.parameters())
 
     if args.print_validation_events == True:
@@ -123,29 +164,38 @@ def egg(params):
                      core.ConsoleLogger(print_train_loss=True, as_json=True),
                      core.PrintValidationEvents(n_epochs=args.n_epochs)]
 
-        trainer = core.Trainer(game=game, optimizer=optimizer, train_data=train_data,
-                               validation_data=val_data, callbacks=callbacks)
+        trainer = core.Trainer(
+            game=game,
+            optimizer=optimizer,
+            train_data=train_data,
+            validation_data=val_data,
+            callbacks=callbacks)
 
     else:
 
         callbacks = [core.TemperatureUpdater(agent=agent_sender, decay=0.9, minimum=0.1),
                      core.ConsoleLogger(print_train_loss=True, as_json=True)]
-        trainer = core.Trainer(game=game, optimizer=optimizer, train_data=train_data,
-                               validation_data=val_data, callbacks=callbacks)
+
+        trainer = core.Trainer(
+            game=game,
+            optimizer=optimizer,
+            train_data=train_data,
+            validation_data=val_data,
+            callbacks=callbacks)
 
     trainer.train(n_epochs=args.n_epochs)
 
-    # sender_inputs, messages, _, receiver_outputs, labels = core.dump_interactions(game, val_data, gs=True,
-    #                                                                               device=torch.device('cuda'),
-    #                                                                               variable_length=True)
-    #
-    # for (seq, l), message, output, label in zip(sender_inputs, messages, receiver_outputs, labels):
-    #     print(f"{seq[:l]} -> {message} -> {output.argmax()} (label = {label})")
-    #
-    # core.close()
+    sender_inputs, messages, _, receiver_outputs, labels = core.dump_interactions(game, val_data, gs=True,
+                                                                                  device=torch.device('cpu'), variable_length=False)
+
+    for (seq, l), message, output, label in zip(sender_inputs, messages, receiver_outputs, labels):
+        print(f"{seq[:l]} -> {message} -> {output.argmax()} (label = {label})")
+
+    core.close()
+
 
 if __name__ == "__main__":
     import sys
 
-    egg(sys.argv[1:])
+    egg_gs_mode(sys.argv[1:])
 
