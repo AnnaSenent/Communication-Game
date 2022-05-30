@@ -10,8 +10,8 @@ class SumSender(nn.Module):
 
 
     def forward(self, x, _aux_input):
-        x = self.fc1(x)
 
+        x = self.fc1(x)
         return x
 
 
@@ -21,9 +21,10 @@ class SumReceiver(nn.Module):
         super(SumReceiver, self).__init__()
 
         self.output = nn.Linear(n_hidden, n_features)
-        self.dropout = nn.Dropout(0.3)
+        # self.dropout = nn.Dropout(0.3)
 
     def forward(self, x, _input, _aux_input):
+
         return self.output(x)
 
         # x = self.dropout(x)
