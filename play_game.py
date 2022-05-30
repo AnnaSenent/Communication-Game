@@ -45,19 +45,12 @@ def get_params(params):
     parser.add_argument(
         "--validation_batch_size", type=int, default=0, help="Batch size for the validation data"
     )
-    # Specify arguments used during the training process (only for gs mode)
+    # Specify arguments used during the training process
+
+    # This is only for gs mode
     parser.add_argument(
         "--temperature", type=float, default=1.0, help="Temperature for the sender agent in gs mode (default : 1.0)"
     )
-
-    # Specify arguments to define the agents
-    # parser.add_argument(
-    #     "--sender_cell", type=str, default="rnn", help="Cell used for the sender agent {rnn, gru, lstm} (default : rnn)"
-    # )
-    #
-    # parser.add_argument(
-    #     "--receiver_cell", type=str, default="rnn", help="Cell used for the receiver agent {rnn, gru, lstm} (default : rnn)"
-    # )
 
     parser.add_argument(
         "--sender_hidden", type=int, default=16, help="Size of the hidden layer for the sender agent (default : 16)"
@@ -66,14 +59,6 @@ def get_params(params):
     parser.add_argument(
         "--receiver_hidden", type=int, default=16, help="Size of the hidden layer for the receiver agent (default : 16)"
     )
-
-    # parser.add_argument(
-    #     "--sender_embedding", type=int, default=16, help="Output dimensionality for the layer that embeds symbols produced by the sender (default : 16)"
-    # )
-    #
-    # parser.add_argument(
-    #     "--receiver_embedding", type=int, default=16, help="Output dimensionality for the layer that embeds messages for the receiver (default : 16)"
-    # )
 
     # Specify argument to control the output
     parser.add_argument(
